@@ -1,0 +1,276 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String             @id @default(uuid())
+  email             String             @unique
+  passwordHash      String
+  name              String
+  role              String             // admin, sales, purchase, manufacturing, inventory, owner
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  salesOrders       SalesOrder[]       @relation("CreatedSalesOrders")
+  purchaseOrders    PurchaseOrder[]    @relation("CreatedPurchaseOrders")
+  manufacturingOps  ManufacturingOrder[] @relation("AssignedManufacturingOrders")
+  workOrders        WorkOrder[]        @relation("AssignedWorkOrders")
+  auditLogs         AuditLog[]
+  employeeActivities EmployeeActivity[]
+  stockLedgerEntries StockLedger[]
+  stockAdjustments  StockAdjustment[]
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  role      String   // admin, sales, purchase, manufacturing, inventory, owner
+  module    String   // dashboard, products, raw_materials, boms, sales, purchases, manufacturing, inventory, audit_logs, users, reports
+  canView   Boolean  @default(false)
+  canCreate Boolean  @default(false)
+  canEdit   Boolean  @default(false)
+  canDelete Boolean  @default(false)
+
+  @@unique([role, module])
+}
+
+model Vendor {
+  id             String          @id @default(uuid())
+  name           String
+  phone          String
+  email          String
+  address        String
+  createdAt      DateTime        @default(now())
+  products       Product[]       @relation("DefaultVendor")
+  purchaseOrders PurchaseOrder[]
+}
+
+model Customer {
+  id          String       @id @default(uuid())
+  name        String
+  phone       String
+  email       String
+  address     String
+  createdAt   DateTime     @default(now())
+  salesOrders SalesOrder[]
+}
+
+model Product {
+  id                  String               @id @default(uuid())
+  name                String
+  sku                 String               @unique
+  productType         String               // finished_good, raw_material
+  salesPrice          Float                @default(0.0)
+  costPrice           Float                @default(0.0)
+  procurementStrategy String               @default("MTS") // MTS (Make to Stock), MTO (Make to Order)
+  procurementType     String               @default("purchase") // purchase, manufacture
+  defaultVendorId     String?
+  defaultVendor       Vendor?              @relation("DefaultVendor", fields: [defaultVendorId], references: [id])
+  defaultBomId        String?
+  onHandQty           Float                @default(0)
+  reservedQty         Float                @default(0)
+  reorderPoint        Float                @default(0)
+  safeStockLevel      Float                @default(0)
+  unit                String               @default("pcs")
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  
+  boms                Bom[]                @relation("ProductBoms")
+  bomComponents       BomComponent[]       @relation("ComponentProduct")
+  salesLines          SalesOrderLine[]
+  purchaseLines       PurchaseOrderLine[]
+  manufacturingOrders ManufacturingOrder[] @relation("FinishedProduct")
+  stockLedgerEntries  StockLedger[]
+  stockAdjustments    StockAdjustment[]
+  lowStockAlerts      LowStockAlert[]
+}
+
+model Bom {
+  id                  String               @id @default(uuid())
+  productId           String
+  product             Product              @relation("ProductBoms", fields: [productId], references: [id])
+  version             String               @default("1.0")
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  components          BomComponent[]
+  operations          BomOperation[]
+  manufacturingOrders ManufacturingOrder[]
+}
+
+model BomComponent {
+  id                 String   @id @default(uuid())
+  bomId              String
+  bom                Bom      @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  componentProductId String
+  componentProduct   Product  @relation("ComponentProduct", fields: [componentProductId], references: [id])
+  quantity           Float
+  unit               String
+}
+
+model BomOperation {
+  id               String      @id @default(uuid())
+  bomId            String
+  bom              Bom         @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  operationName    String      // Assembly, Painting, Packaging, etc.
+  sequence         Int
+  durationMinutes  Int
+  workCenterId     String
+  workCenter       WorkCenter  @relation(fields: [workCenterId], references: [id])
+}
+
+model WorkCenter {
+  id            String         @id @default(uuid())
+  name          String         @unique // Assembly Line, Paint Floor, Packaging Unit
+  description   String
+  bomOperations BomOperation[]
+  workOrders    WorkOrder[]
+}
+
+model SalesOrder {
+  id                   String               @id @default(uuid())
+  orderNumber          String               @unique // SO-001, etc.
+  customerId           String
+  customer             Customer             @relation(fields: [customerId], references: [id])
+  status               String               @default("draft") // draft, confirmed, partially_delivered, fully_delivered, cancelled
+  orderDate            DateTime             @default(now())
+  expectedDeliveryDate DateTime
+  createdById          String
+  createdBy            User                 @relation("CreatedSalesOrders", fields: [createdById], references: [id])
+  totalAmount          Float                @default(0.0)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  lines                SalesOrderLine[]
+  manufacturingOrders  ManufacturingOrder[] @relation("SourceSalesOrder")
+}
+
+model SalesOrderLine {
+  id               String     @id @default(uuid())
+  salesOrderId     String
+  salesOrder       SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product    @relation(fields: [productId], references: [id])
+  quantity         Float
+  deliveredQuantity Float     @default(0)
+  unitPrice        Float
+}
+
+model PurchaseOrder {
+  id            String              @id @default(uuid())
+  orderNumber   String              @unique // PO-001, etc.
+  vendorId      String
+  vendor        Vendor              @relation(fields: [vendorId], references: [id])
+  status        String              @default("draft") // draft, confirmed, partially_received, fully_received, cancelled
+  orderDate     DateTime            @default(now())
+  expectedDate  DateTime
+  createdById   String
+  createdBy     User                @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
+  totalAmount   Float               @default(0.0)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  lines         PurchaseOrderLine[]
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Float
+  receivedQuantity Float        @default(0)
+  unitCost        Float
+}
+
+model ManufacturingOrder {
+  id                 String      @id @default(uuid())
+  orderNumber        String      @unique // MO-001, etc.
+  productId          String
+  product            Product     @relation("FinishedProduct", fields: [productId], references: [id])
+  bomId              String
+  bom                Bom         @relation(fields: [bomId], references: [id])
+  quantity           Float
+  status             String      @default("draft") // draft, components_reserved, in_progress, completed, cancelled
+  sourceSalesOrderId String?
+  sourceSalesOrder   SalesOrder? @relation("SourceSalesOrder", fields: [sourceSalesOrderId], references: [id])
+  assigneeId         String?
+  assignee           User?       @relation("AssignedManufacturingOrders", fields: [assigneeId], references: [id])
+  dueDate            DateTime
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  workOrders         WorkOrder[]
+}
+
+model WorkOrder {
+  id                   String             @id @default(uuid())
+  manufacturingOrderId String
+  manufacturingOrder   ManufacturingOrder @relation(fields: [manufacturingOrderId], references: [id], onDelete: Cascade)
+  operationName        String
+  sequence             Int                @default(1)
+  workCenterId         String
+  workCenter           WorkCenter         @relation(fields: [workCenterId], references: [id])
+  status               String             @default("pending") // pending, in_progress, completed
+  assignedToId         String?
+  assignedTo           User?              @relation("AssignedWorkOrders", fields: [assignedToId], references: [id])
+  startedAt            DateTime?
+  completedAt          DateTime?
+}
+
+model StockLedger {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  movementType  String   // purchase_receipt, sales_delivery, mo_consumption, mo_production, stock_adjustment
+  quantityDelta Float
+  referenceType String?  // sales_order, purchase_order, manufacturing_order, adjustment
+  referenceId   String?
+  balanceAfter  Float
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model StockAdjustment {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  quantityDelta Float
+  reason        String
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // create, update, delete, status_change, etc.
+  entityType String   // product, sales_order, purchase_order, manufacturing_order, etc.
+  entityId   String
+  oldValue   String?  // JSON string
+  newValue   String?  // JSON string
+  createdAt  DateTime @default(now())
+}
+
+model EmployeeActivity {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  activityType String   // login, logout, so_created, po_created, mo_completed, delivery_completed
+  referenceId  String?
+  createdAt    DateTime @default(now())
+}
+
+model LowStockAlert {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  shortageQty Float
+  status      String   @default("active") // active, resolved
+  createdAt   DateTime @default(now())
+}
