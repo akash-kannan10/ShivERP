@@ -48,6 +48,13 @@ router.post('/', authenticateToken, requirePermission('sales', 'create'), async 
     return res.status(400).json({ error: 'Customer ID, expected delivery date, and order lines are required' });
   }
 
+  // Check for duplicate product IDs
+  const productIds = lines.map(l => l.productId);
+  const uniqueProductIds = new Set(productIds);
+  if (productIds.length !== uniqueProductIds.size) {
+    return res.status(400).json({ error: 'Duplicate products selected. Please increase the quantity of the existing line instead.' });
+  }
+
   try {
     const order = await prisma.$transaction(async (tx) => {
       // Generate SO number

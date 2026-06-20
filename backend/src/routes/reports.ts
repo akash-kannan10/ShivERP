@@ -62,23 +62,42 @@ router.get('/dashboard/metrics', authenticateToken, async (req, res) => {
 // GET /api/reports/dashboard/charts - Charts datasets
 router.get('/dashboard/charts', authenticateToken, async (req, res) => {
   try {
-    // 1. Sales Trend (Last 6 months or 7 days)
+    // 1. Sales & Purchase Trend
     const salesOrders = await prisma.salesOrder.findMany({
       where: { status: { not: 'cancelled' } },
       select: { createdAt: true, totalAmount: true }
     });
 
-    // Group sales by day or month (for local database we will group by day/date for mock simplicity)
-    const salesByDay: Record<string, number> = {};
-    salesOrders.forEach(so => {
-      const dateStr = so.createdAt.toISOString().split('T')[0];
-      salesByDay[dateStr] = (salesByDay[dateStr] || 0) + so.totalAmount;
+    const purchaseOrders = await prisma.purchaseOrder.findMany({
+      where: { status: { not: 'cancelled' } },
+      select: { createdAt: true, totalAmount: true }
     });
 
-    const salesTrend = Object.keys(salesByDay).map(date => ({
-      date,
-      amount: salesByDay[date]
-    })).sort((a, b) => a.date.localeCompare(b.date)).slice(-10); // last 10 days of sales
+    // Group sales and purchases by day
+    const trendMap: Record<string, { date: string; revenue: number; expenses: number; profit: number; amount: number }> = {};
+
+    salesOrders.forEach(so => {
+      const dateStr = so.createdAt.toISOString().split('T')[0];
+      if (!trendMap[dateStr]) {
+        trendMap[dateStr] = { date: dateStr, revenue: 0, expenses: 0, profit: 0, amount: 0 };
+      }
+      trendMap[dateStr].revenue += so.totalAmount;
+      trendMap[dateStr].amount += so.totalAmount; // backward compatibility
+    });
+
+    purchaseOrders.forEach(po => {
+      const dateStr = po.createdAt.toISOString().split('T')[0];
+      if (!trendMap[dateStr]) {
+        trendMap[dateStr] = { date: dateStr, revenue: 0, expenses: 0, profit: 0, amount: 0 };
+      }
+      trendMap[dateStr].expenses += po.totalAmount;
+    });
+
+    const salesTrend = Object.keys(trendMap).map(date => {
+      const item = trendMap[date];
+      item.profit = item.revenue - item.expenses;
+      return item;
+    }).sort((a, b) => a.date.localeCompare(b.date)).slice(-10); // last 10 days of sales
 
     // 2. Top Products by sales volume
     const orderLines = await prisma.salesOrderLine.findMany({
@@ -104,12 +123,14 @@ router.get('/dashboard/charts', authenticateToken, async (req, res) => {
     const reservedMo = await prisma.manufacturingOrder.count({ where: { status: 'components_reserved' } });
     const progressMo = await prisma.manufacturingOrder.count({ where: { status: 'in_progress' } });
     const completedMo = await prisma.manufacturingOrder.count({ where: { status: 'completed' } });
+    const cancelledMo = await prisma.manufacturingOrder.count({ where: { status: 'cancelled' } });
 
     const mfgProgress = [
       { name: 'Draft', count: draftMo },
       { name: 'Reserved', count: reservedMo },
       { name: 'In Progress', count: progressMo },
-      { name: 'Completed', count: completedMo }
+      { name: 'Completed', count: completedMo },
+      { name: 'Cancelled', count: cancelledMo }
     ];
 
     res.json({

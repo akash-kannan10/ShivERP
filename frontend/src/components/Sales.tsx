@@ -88,6 +88,13 @@ export default function Sales() {
       return;
     }
 
+    const selectedProductIds = lines.map(l => l.productId).filter(Boolean);
+    const hasDuplicates = selectedProductIds.some((val, i) => selectedProductIds.indexOf(val) !== i);
+    if (hasDuplicates) {
+      alert('Duplicate products selected. Please increase the quantity of the existing line instead.');
+      return;
+    }
+
     try {
       await apiCall('/sales', {
         method: 'POST',
@@ -389,9 +396,14 @@ export default function Sales() {
                         required
                       >
                         <option value="">-- Choose Finished Product --</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} (Rs. {p.salesPrice})</option>
-                        ))}
+                        {products.map(p => {
+                          const isAlreadySelected = lines.some((l, lIdx) => l.productId === p.id && lIdx !== idx);
+                          return (
+                            <option key={p.id} value={p.id} disabled={isAlreadySelected}>
+                              {p.name} (Rs. {p.salesPrice}){isAlreadySelected ? ' (Already Selected)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="w-24">

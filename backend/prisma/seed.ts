@@ -202,7 +202,7 @@ async function main() {
       productType: 'raw_material',
       costPrice: 5.0,
       salesPrice: 0.0,
-      onHandQty: 100.0,
+      onHandQty: 35.0,
       reservedQty: 0.0,
       reorderPoint: 40.0,
       safeStockLevel: 20.0,
@@ -218,7 +218,7 @@ async function main() {
       productType: 'raw_material',
       costPrice: 25.0,
       salesPrice: 0.0,
-      onHandQty: 25.0,
+      onHandQty: 8.0,
       reservedQty: 0.0,
       reorderPoint: 10.0,
       safeStockLevel: 5.0,
@@ -250,7 +250,7 @@ async function main() {
       productType: 'raw_material',
       costPrice: 12.0,
       salesPrice: 0.0,
-      onHandQty: 10.0,
+      onHandQty: 3.0,
       reservedQty: 0.0,
       reorderPoint: 5.0,
       safeStockLevel: 2.0,
@@ -455,8 +455,10 @@ async function main() {
     }
   }
 
-  // 11. Create a few historical and pending orders to make dashboard look rich
-  // Sales Order (Delivered)
+  // 11. Create historical and pending orders to make dashboard look rich
+  console.log('Generating historical sales and purchases for the last 10 days...');
+
+  // Create a base sales order first so we can reference it in audit log/ledger if needed
   const so1 = await prisma.salesOrder.create({
     data: {
       orderNumber: 'SO-2026-001',
@@ -474,43 +476,6 @@ async function main() {
     }
   });
 
-  // Add stock movement for historical delivery
-  await prisma.stockLedger.create({
-    data: {
-      productId: fgTable.id,
-      movementType: 'sales_delivery',
-      quantityDelta: -4.0,
-      referenceType: 'sales_order',
-      referenceId: so1.id,
-      balanceAfter: 1.0, // Before it was 5.0 (which was on_hand), so after delivery it became 1.0. Let's adjust seed stock instead to keep it simple.
-      createdById: salesUser.id
-    }
-  });
-
-  // Sales Order (Pending)
-  await prisma.salesOrder.create({
-    data: {
-      orderNumber: 'SO-2026-002',
-      customerId: customerComfort.id,
-      status: 'confirmed',
-      orderDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-      expectedDeliveryDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // 4 days later
-      createdById: salesUser.id,
-      totalAmount: 1800.0,
-      lines: {
-        create: [
-          { productId: fgChair.id, quantity: 10.0, deliveredQuantity: 0.0, unitPrice: 180.0 }
-        ]
-      }
-    }
-  });
-  // Reserve finished stock for this order
-  await prisma.product.update({
-    where: { id: fgChair.id },
-    data: { reservedQty: 10.0 }
-  });
-
-  // Purchase Order (Received)
   const po1 = await prisma.purchaseOrder.create({
     data: {
       orderNumber: 'PO-2026-001',
@@ -528,26 +493,65 @@ async function main() {
     }
   });
 
-  // Purchase Order (Pending)
-  await prisma.purchaseOrder.create({
-    data: {
-      orderNumber: 'PO-2026-002',
-      vendorId: vendorTimber.id,
-      status: 'confirmed',
-      orderDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      expectedDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      createdById: purchaseUser.id,
-      totalAmount: 500.0,
-      lines: {
-        create: [
-          { productId: rmTop.id, quantity: 20.0, receivedQuantity: 0.0, unitCost: 25.0 }
-        ]
-      }
+  // Loop from 10 days ago to today and create sales and purchases
+  for (let i = 10; i >= 0; i--) {
+    const orderDate = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    
+    // Seed a Sales Order for this day (except SO-2026-001 day to avoid clash or duplicate counts)
+    if (i !== 5 && i !== 3 && i !== 7) {
+      const salesQty = Math.floor(Math.random() * 3) + 1; // 1-3 pcs
+      const salesPriceVal = fgChair.salesPrice;
+      const totalAmount = salesQty * salesPriceVal;
+      
+      await prisma.salesOrder.create({
+        data: {
+          orderNumber: `SO-HIST-00${10 - i}`,
+          customerId: customerComfort.id,
+          status: i > 0 ? 'fully_delivered' : 'confirmed',
+          orderDate: orderDate,
+          createdAt: orderDate,
+          expectedDeliveryDate: new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000),
+          createdById: salesUser.id,
+          totalAmount,
+          lines: {
+            create: [
+              { productId: fgChair.id, quantity: salesQty, deliveredQuantity: i > 0 ? salesQty : 0, unitPrice: salesPriceVal }
+            ]
+          }
+        }
+      });
     }
-  });
 
-  // Manufacturing Order (Completed)
-  const mo1 = await prisma.manufacturingOrder.create({
+    // Seed a Purchase Order for this day
+    if (i !== 7 && i !== 1 && i !== 5 && i !== 8) {
+      const purQty = Math.floor(Math.random() * 5) + 5; // 5-9 pcs
+      const costPriceVal = rmLegs.costPrice;
+      const totalAmount = purQty * costPriceVal;
+
+      await prisma.purchaseOrder.create({
+        data: {
+          orderNumber: `PO-HIST-00${10 - i}`,
+          vendorId: vendorTimber.id,
+          status: i > 2 ? 'fully_received' : 'confirmed',
+          orderDate: orderDate,
+          createdAt: orderDate,
+          expectedDate: new Date(orderDate.getTime() + 3 * 24 * 60 * 60 * 1000),
+          createdById: purchaseUser.id,
+          totalAmount,
+          lines: {
+            create: [
+              { productId: rmLegs.id, quantity: purQty, receivedQuantity: i > 2 ? purQty : 0, unitCost: costPriceVal }
+            ]
+          }
+        }
+      });
+    }
+  }
+
+  // 12. Create Manufacturing Orders covering all 5 statuses
+  console.log('Seeding Manufacturing Orders covering all statuses...');
+  // Completed
+  await prisma.manufacturingOrder.create({
     data: {
       orderNumber: 'MO-2026-001',
       productId: fgTable.id,
@@ -566,7 +570,7 @@ async function main() {
     }
   });
 
-  // Manufacturing Order (Pending)
+  // In Progress
   await prisma.manufacturingOrder.create({
     data: {
       orderNumber: 'MO-2026-002',
@@ -586,16 +590,76 @@ async function main() {
     }
   });
 
-  // Seed Employee Activities
+  // Draft
+  await prisma.manufacturingOrder.create({
+    data: {
+      orderNumber: 'MO-2026-003',
+      productId: fgDesk.id,
+      bomId: bomDesk.id,
+      quantity: 2.0,
+      status: 'draft',
+      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      assigneeId: manufacturingUser.id,
+      workOrders: {
+        create: [
+          { operationName: 'Assembly', sequence: 1, workCenterId: wcAssembly.id, status: 'pending' },
+          { operationName: 'Painting & Varnishing', sequence: 2, workCenterId: wcPaint.id, status: 'pending' },
+          { operationName: 'Packaging', sequence: 3, workCenterId: wcPacking.id, status: 'pending' }
+        ]
+      }
+    }
+  });
+
+  // Components Reserved
+  await prisma.manufacturingOrder.create({
+    data: {
+      orderNumber: 'MO-2026-004',
+      productId: fgTable.id,
+      bomId: bomTable.id,
+      quantity: 3.0,
+      status: 'components_reserved',
+      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      assigneeId: manufacturingUser.id,
+      workOrders: {
+        create: [
+          { operationName: 'Assembly', sequence: 1, workCenterId: wcAssembly.id, status: 'pending' },
+          { operationName: 'Painting & Polishing', sequence: 2, workCenterId: wcPaint.id, status: 'pending' },
+          { operationName: 'Packaging', sequence: 3, workCenterId: wcPacking.id, status: 'pending' }
+        ]
+      }
+    }
+  });
+
+  // Cancelled
+  await prisma.manufacturingOrder.create({
+    data: {
+      orderNumber: 'MO-2026-005',
+      productId: fgChair.id,
+      bomId: bomChair.id,
+      quantity: 1.0,
+      status: 'cancelled',
+      dueDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      assigneeId: manufacturingUser.id,
+      workOrders: {
+        create: [
+          { operationName: 'Assembly', sequence: 1, workCenterId: wcAssembly.id, status: 'pending' }
+        ]
+      }
+    }
+  });
+
+  // 13. Seed Employee Activities
   await prisma.employeeActivity.createMany({
     data: [
       { userId: adminUser.id, activityType: 'login', createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
-      { userId: salesUser.id, activityType: 'so_created', referenceId: 'SO-2026-002', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-      { userId: manufacturingUser.id, activityType: 'mo_completed', referenceId: 'MO-2026-001', createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000) }
+      { userId: salesUser.id, activityType: 'so_created', referenceId: 'SO-HIST-009', createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      { userId: manufacturingUser.id, activityType: 'mo_completed', referenceId: 'MO-2026-001', createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000) },
+      { userId: purchaseUser.id, activityType: 'po_created', referenceId: 'PO-HIST-008', createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000) },
+      { userId: salesUser.id, activityType: 'delivery_completed', referenceId: 'SO-2026-001', createdAt: new Date(Date.now() - 50 * 60 * 1000) }
     ]
   });
 
-  // Seed Audit Logs
+  // 14. Seed Audit Logs
   await prisma.auditLog.createMany({
     data: [
       { userId: adminUser.id, action: 'create', entityType: 'product', entityId: fgTable.id, newValue: JSON.stringify(fgTable) },

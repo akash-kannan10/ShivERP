@@ -15,6 +15,7 @@ import inventoryRouter from './routes/inventory';
 import usersRouter from './routes/users';
 import copilotRouter from './routes/copilot';
 import reportsRouter from './routes/reports';
+import auditRouter from './routes/audit';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/inventory', inventoryRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/copilot', copilotRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/audit', auditRouter);
 
 // Base route
 app.get('/', (req: Request, res: Response) => {
