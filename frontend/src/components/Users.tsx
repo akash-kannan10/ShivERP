@@ -75,8 +75,11 @@ export default function Users() {
   };
 
   // Group permission rows by role
-  const rolesList = ['sales', 'manufacture', 'inventory'];
-  const modulesList = ['products', 'boms', 'sales', 'purchases', 'manufacturing', 'inventory'];
+  const rolesList = ['sales', 'purchase', 'manufacturing', 'inventory', 'owner'];
+  const modulesList = [
+    'dashboard', 'products', 'raw_materials', 'boms', 'sales', 
+    'purchases', 'manufacturing', 'inventory', 'audit_logs', 'users', 'reports'
+  ];
 
   return (
     <div className="space-y-8">
@@ -271,8 +274,10 @@ export default function Users() {
                   required
                 >
                   <option value="sales">sales (Sales & Deliveries)</option>
-                  <option value="manufacture">manufacture (Workshop floor manager)</option>
+                  <option value="purchase">purchase (Procurement & Purchasing)</option>
+                  <option value="manufacturing">manufacturing (Workshop floor manager)</option>
                   <option value="inventory">inventory (Warehouse receipts & counts)</option>
+                  <option value="owner">owner (Business Owner)</option>
                 </select>
               </div>
 

@@ -160,7 +160,17 @@ router.delete('/:id', authenticateToken, requirePermission('products', 'delete')
       return res.status(400).json({ error: 'Cannot delete product with remaining inventory or reserved items. Adjust stock to 0 first.' });
     }
 
-    await prisma.product.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.lowStockAlert.deleteMany({ where: { productId: id } }),
+      prisma.bomComponent.deleteMany({ where: { componentProductId: id } }),
+      prisma.bom.deleteMany({ where: { productId: id } }),
+      prisma.stockLedger.deleteMany({ where: { productId: id } }),
+      prisma.stockAdjustment.deleteMany({ where: { productId: id } }),
+      prisma.salesOrderLine.deleteMany({ where: { productId: id } }),
+      prisma.purchaseOrderLine.deleteMany({ where: { productId: id } }),
+      prisma.manufacturingOrder.deleteMany({ where: { productId: id } }),
+      prisma.product.delete({ where: { id } })
+    ]);
 
     // Write Audit Log
     await prisma.auditLog.create({

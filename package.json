@@ -10,6 +10,7 @@
     "db:seed": "npm run db:seed --prefix backend"
   },
   "devDependencies": {
+    "@types/node": "^26.0.0",
     "concurrently": "^8.2.2"
   }
 }

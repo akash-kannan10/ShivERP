@@ -33,11 +33,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleReplenish = async (alert: any) => {
-    setReplenishingId(alert.id);
+  const handleReplenish = async (alertItem: any) => {
+    setReplenishingId(alertItem.id);
     setReplenishSuccess(null);
     try {
-      const defaultVendorId = alert.product.defaultVendorId;
+      const defaultVendorId = alertItem.product.defaultVendorId;
       if (!defaultVendorId) {
         alert('Cannot replenish: No default vendor configured for this product.');
         return;
@@ -54,9 +54,9 @@ export default function Dashboard() {
           expectedDate: expectedDate.toISOString(),
           lines: [
             {
-              productId: alert.productId,
-              quantity: alert.shortageQty + alert.product.safeStockLevel,
-              unitCost: alert.product.costPrice
+              productId: alertItem.productId,
+              quantity: alertItem.shortageQty + alertItem.product.safeStockLevel,
+              unitCost: alertItem.product.costPrice
             }
           ]
         })

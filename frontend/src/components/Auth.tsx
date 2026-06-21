@@ -122,7 +122,7 @@ export default function Auth() {
               📈 Sales Manager
             </button>
             <button
-              onClick={() => handleQuickLogin('manufacture@shiverp.com')}
+              onClick={() => handleQuickLogin('manufacturing@shiverp.com')}
               className="px-3 py-2 bg-slate-900/40 border border-slate-800 hover:bg-slate-900 hover:border-slate-700 text-xs rounded text-slate-300 font-medium transition-colors text-left"
             >
               ⚙️ Workshop Chief

@@ -132,7 +132,17 @@ router.delete('/:id', authenticateToken, requirePermission('users', 'delete'), a
       return res.status(400).json({ error: 'Cannot self-delete logged in administrator' });
     }
 
-    await prisma.user.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.employeeActivity.deleteMany({ where: { userId: id } }),
+      prisma.workOrder.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } }),
+      prisma.manufacturingOrder.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } }),
+      prisma.auditLog.updateMany({ where: { userId: id }, data: { userId: null } }),
+      prisma.stockLedger.updateMany({ where: { createdById: id }, data: { createdById: null } }),
+      prisma.stockAdjustment.deleteMany({ where: { createdById: id } }),
+      prisma.salesOrder.deleteMany({ where: { createdById: id } }),
+      prisma.purchaseOrder.deleteMany({ where: { createdById: id } }),
+      prisma.user.delete({ where: { id } })
+    ]);
 
     // Audit Log
     await prisma.auditLog.create({
