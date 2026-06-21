@@ -339,6 +339,15 @@ export default function Purchases() {
                   </button>
                 </div>
 
+                <div className="flex gap-4 items-center pb-1 border-b border-slate-800/50">
+                  <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Material</div>
+                  <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quantity</div>
+                  <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Unit Cost</div>
+                  {lines.length > 1 && (
+                    <div className="text-xs text-transparent select-none">Remove</div>
+                  )}
+                </div>
+
                 {lines.map((line, idx) => (
                   <div key={idx} className="flex gap-4 items-center">
                     <div className="flex-1">

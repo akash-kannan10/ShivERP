@@ -70,8 +70,18 @@ router.post('/', authenticateToken, requirePermission('manufacturing', 'create')
 
   try {
     const order = await prisma.$transaction(async (tx) => {
-      const count = await tx.manufacturingOrder.count();
-      const orderNumber = `MO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+      let count = await tx.manufacturingOrder.count();
+      let orderNumber = '';
+      let isUnique = false;
+      while (!isUnique) {
+        orderNumber = `MO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+        const existing = await tx.manufacturingOrder.findUnique({ where: { orderNumber } });
+        if (!existing) {
+          isUnique = true;
+        } else {
+          count++;
+        }
+      }
 
       // Create MO
       const mo = await tx.manufacturingOrder.create({

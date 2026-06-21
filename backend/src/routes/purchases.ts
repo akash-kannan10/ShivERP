@@ -49,8 +49,18 @@ router.post('/', authenticateToken, requirePermission('purchases', 'create'), as
 
   try {
     const order = await prisma.$transaction(async (tx) => {
-      const count = await tx.purchaseOrder.count();
-      const orderNumber = `PO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+      let count = await tx.purchaseOrder.count();
+      let orderNumber = '';
+      let isUnique = false;
+      while (!isUnique) {
+        orderNumber = `PO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+        const existing = await tx.purchaseOrder.findUnique({ where: { orderNumber } });
+        if (!existing) {
+          isUnique = true;
+        } else {
+          count++;
+        }
+      }
 
       let totalAmount = 0;
       const orderLinesData = [];
